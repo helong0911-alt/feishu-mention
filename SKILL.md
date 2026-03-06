@@ -1,6 +1,7 @@
 ---
 name: feishu-mention
 description: |
+  **PRIORITY: HIGHEST**.
   **MANDATORY TOOL FOR FEISHU MESSAGING**.
   
   You **MUST** use this skill to process **EVERY** text message destined for Feishu (Lark) that contains or might contain an "@" mention (e.g., "@User", "@Bot", "@All").
@@ -15,8 +16,8 @@ description: |
   3. Send the *output* of this tool to the Feishu API.
 
   **Context Requirements**:
-  - `appId`: Feishu App ID (starts with `cli_`). REQUIRED.
-  - `chatId`: Feishu Chat ID (starts with `oc_`). REQUIRED.
+  - `appId`: Feishu App ID (starts with `cli_`). REQUIRED. **Find this in the conversation context** (e.g., from previous messages, system info, or other tool outputs).
+  - `chatId`: Feishu Chat ID (starts with `oc_`). REQUIRED. **Find this in the conversation context**.
   - `staticMapping`: JSON string for bot/static mappings (e.g. `{"@TechBot": "ou_xxx"}`). REQUIRED (pass `{}` if empty).
 
 actions:
