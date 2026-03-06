@@ -15,7 +15,10 @@ const DEBUG_LOG = true;
 function log(level, ...args) {
   if (DEBUG_LOG) {
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] [FeishuMention ${level}]`, ...args);
+    const msg = `[${timestamp}] [FeishuMention ${level}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`;
+    
+    // 标准输出
+    console.log(msg);
   }
 }
 
@@ -32,7 +35,7 @@ export class FeishuMentionResolver {
    * @param {string} [options.appSecret] - 飞书 App Secret
    */
   constructor(cacheDir, options = {}) {
-    log('INFO', '开始初始化解析器...');
+    // log('INFO', '开始初始化解析器...');
     
     this.cacheDir = cacheDir || path.join(
       process.env.HOME || process.env.USERPROFILE,
@@ -44,24 +47,24 @@ export class FeishuMentionResolver {
     
     if (!fs.existsSync(this.cacheDir)) {
       fs.mkdirSync(this.cacheDir, { recursive: true });
-      log('INFO', `创建缓存目录：${this.cacheDir}`);
+      // log('INFO', `创建缓存目录：${this.cacheDir}`);
     }
     
     this.cacheTTL = 2 * 60 * 60 * 1000; // 2 小时
     
     this.memoryCache = new Map();
     
-    // 机器人映射表和别名
-    this.botMappings = options.botMappings || {};
+    // 静态映射表（原机器人映射表）
+    this.staticMappings = options.staticMappings || {};
     
     // 尝试从环境变量 FEISHU_BOT_MAPPING 加载配置
     // 格式: JSON string, e.g. '{"@技术助手":"ou_xxx", "@审批机器人":"ou_yyy"}'
     if (process.env.FEISHU_BOT_MAPPING) {
       try {
         const envMappings = JSON.parse(process.env.FEISHU_BOT_MAPPING);
-        // 环境变量优先级更高，覆盖传入的配置
-        this.botMappings = { ...this.botMappings, ...envMappings };
-        log('INFO', `✅ 从环境变量 FEISHU_BOT_MAPPING 加载了 ${Object.keys(envMappings).length} 个机器人映射`);
+        // 环境变量作为初始值
+        this.staticMappings = { ...this.staticMappings, ...envMappings };
+        // log('INFO', `✅ 从环境变量 FEISHU_BOT_MAPPING 加载了 ${Object.keys(envMappings).length} 个静态映射`);
       } catch (error) {
         log('WARN', `❌ 解析环境变量 FEISHU_BOT_MAPPING 失败: ${error.message}`);
       }
@@ -77,7 +80,7 @@ export class FeishuMentionResolver {
       expireTime: 0
     };
 
-    log('INFO', '✅ 解析器初始化完成');
+    // log('INFO', '✅ 解析器初始化完成');
   }
   
   _getCacheFile(appId, chatId) {
@@ -93,7 +96,7 @@ export class FeishuMentionResolver {
     if (this.memoryCache.has(key)) {
       const [timestamp, members] = this.memoryCache.get(key);
       if (Date.now() - timestamp < this.cacheTTL) {
-        log('INFO', `✅ 内存缓存命中 (${members.length}个成员)`);
+        // log('INFO', `✅ 内存缓存命中 (${members.length}个成员)`);
         return members;
       }
     }
@@ -101,7 +104,7 @@ export class FeishuMentionResolver {
     // 查文件缓存
     const cacheFile = this._getCacheFile(appId, chatId);
     if (!fs.existsSync(cacheFile)) {
-      log('WARN', `❌ 缓存文件不存在：${cacheFile}`);
+      // log('WARN', `❌ 缓存文件不存在：${cacheFile}`);
       return null;
     }
     
@@ -110,11 +113,11 @@ export class FeishuMentionResolver {
       const data = JSON.parse(content);
       
       if (Date.now() - data.updated_at > this.cacheTTL) {
-        log('WARN', '❌ 缓存已过期');
+        // log('WARN', '❌ 缓存已过期');
         return null;
       }
       
-      log('INFO', `✅ 文件缓存命中 (${data.members_data?.length || 0}个成员)`);
+      // log('INFO', `✅ 文件缓存命中 (${data.members_data?.length || 0}个成员)`);
       this.memoryCache.set(key, [Date.now(), data.members_data]);
       return data.members_data;
     } catch (error) {
@@ -129,11 +132,11 @@ export class FeishuMentionResolver {
   async _getTenantAccessToken(appId = this.appId, appSecret = this.appSecret) {
     // 检查缓存
     if (this.tokenCache.token && Date.now() < this.tokenCache.expireTime) {
-      log('DEBUG', '使用缓存的 Tenant Access Token');
+      // log('DEBUG', '使用缓存的 Tenant Access Token');
       return this.tokenCache.token;
     }
 
-    log('INFO', '正在获取新的 Tenant Access Token...');
+    // log('INFO', '正在获取新的 Tenant Access Token...');
     try {
       const response = await fetch('https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal', {
         method: 'POST',
@@ -160,7 +163,7 @@ export class FeishuMentionResolver {
       // 提前 5 分钟过期，确保可用
       this.tokenCache.expireTime = Date.now() + (data.expire - 300) * 1000;
       
-      log('INFO', '成功获取 Tenant Access Token');
+      // log('INFO', '成功获取 Tenant Access Token');
       return this.tokenCache.token;
     } catch (error) {
       log('ERROR', '获取 Tenant Access Token 失败:', error.message);
@@ -182,7 +185,7 @@ export class FeishuMentionResolver {
     const token = await this._getTenantAccessToken(currentAppId, currentAppSecret);
     if (!token) return [];
 
-    log('INFO', `正在从飞书 API 获取群成员 (chat_id: ${chatId})...`);
+    // log('INFO', `正在从飞书 API 获取群成员 (chat_id: ${chatId})...`);
     
     const members = [];
     let pageToken = '';
@@ -228,7 +231,7 @@ export class FeishuMentionResolver {
         pageToken = data.data.page_token;
       }
       
-      log('INFO', `✅ 成功获取 ${members.length} 个群成员`);
+      // log('INFO', `✅ 成功获取 ${members.length} 个群成员`);
       return members;
     } catch (error) {
       log('ERROR', '调用飞书 API 获取成员失败:', error.message);
@@ -253,12 +256,12 @@ export class FeishuMentionResolver {
    * 解析单个提及
    */
   async resolveMention(mention, appId, chatId) {
-    log('INFO', `▶️ resolveMention: "${mention}"`);
+    // log('INFO', `▶️ resolveMention: "${mention}"`);
     
     // 检查是否已经是<at>标签格式
     const atTagPattern = /<at\s+user_id=".*?".*?>.*?<\/at>/;
     if (atTagPattern.test(mention)) {
-      log('INFO', `✅ 已是<at>标签格式，直接返回`);
+      // log('INFO', `✅ 已是<at>标签格式，直接返回`);
       return mention;
     }
     
@@ -269,7 +272,7 @@ export class FeishuMentionResolver {
       const name = oldMatch[1];
       const openId = oldMatch[0].substring(name.length + 1).trim();
       const tag = this.buildMentionTag(name, openId);
-      log('INFO', `✅ 从旧格式转换为新格式:"${mention}" -> "${tag}"`);
+      // log('INFO', `✅ 从旧格式转换为新格式:"${mention}" -> "${tag}"`);
       return tag;
     }
     
@@ -283,22 +286,24 @@ export class FeishuMentionResolver {
     const name = nameMatch[1];
     let matchedOpenId = null;
     
-    log('DEBUG', `🔍 开始查找: "${name}"`);
+    // log('DEBUG', `🔍 开始查找: "${name}"`);
     
-    // ① 机器人映射表（最高优先级）
+    // ① 静态映射（固定映射，最高优先级）
     // 支持：
     // 1. 大小写不敏感
     // 2. 配置项 key 可以带 @ 也可以不带
     // 3. 环境变量或配置文件加载的映射
     const lowerName = name.toLowerCase();
-    for (const [key, id] of Object.entries(this.botMappings)) {
+    for (const [key, id] of Object.entries(this.staticMappings)) {
       // 归一化 key: 去掉可能的 @ 前缀，并转小写
       const normalizedKey = key.replace(/^@/, '').toLowerCase();
+      // Add detailed debug log for comparison
+      // log('DEBUG', `比较: "${lowerName}" vs "${normalizedKey}" (config: ${key})`);
       if (normalizedKey === lowerName) {
         matchedOpenId = id;
         // 使用配置中的名称（保留大小写）作为显示名称
         const displayName = key.replace(/^@/, '');
-        log('INFO', `✅ [botMappings] 匹配到：${name} (key: ${key}) → ${matchedOpenId}`);
+        // log('INFO', `✅ [staticMappings] 匹配到：${name} (key: ${key}) → ${matchedOpenId}`);
         return this.buildMentionTag(displayName, matchedOpenId);
       }
     }
@@ -310,7 +315,7 @@ export class FeishuMentionResolver {
     // ② 别名映射
     for (const aliasRule of this.userAliases) {
       if (aliasRule.name === name || aliasRule.alias.includes(name)) {
-        log('INFO', `✅ [aliases] 别名映射：${name} → ${aliasRule.name}`);
+        // log('INFO', `✅ [aliases] 别名映射：${name} → ${aliasRule.name}`);
         return await this.resolveMention(`@${aliasRule.name}`, appId, chatId);
       }
     }
@@ -322,7 +327,7 @@ export class FeishuMentionResolver {
       for (const member of members) {
         if (member.name === name) {
           matchedOpenId = member.open_id;
-          log('INFO', `✅ [cache] 找到：${name} → ${matchedOpenId}`);
+          // log('INFO', `✅ [cache] 找到：${name} → ${matchedOpenId}`);
           break;
         }
       }
@@ -333,7 +338,7 @@ export class FeishuMentionResolver {
     }
     
     // ④ API 获取
-    log('DEBUG', `🌐 尝试 API 获取...`);
+    // log('DEBUG', `🌐 尝试 API 获取...`);
     try {
       const newMembers = await this.fetchMembersFromApi(appId, chatId);
       
@@ -343,7 +348,7 @@ export class FeishuMentionResolver {
         for (const member of newMembers) {
           if (member.name === name) {
             matchedOpenId = member.member_id || member.open_id; // API 兼容
-            log('INFO', `✅ [API] 找到：${name} → ${matchedOpenId}`);
+            // log('INFO', `✅ [API] 找到：${name} → ${matchedOpenId}`);
             break;
           }
         }
@@ -368,9 +373,18 @@ export class FeishuMentionResolver {
     // 允许 appId 为空，此时使用实例配置的默认 appId
     const currentAppId = appId || this.appId;
     
-    log('INFO', `▶️ resolveTextMentions`);
-    log('DEBUG', `原文本："${text}" (appId: ${currentAppId}, chatId: ${chatId})`);
+    // log('INFO', `▶️ resolveTextMentions`);
+    // log('DEBUG', `原文本："${text}" (appId: ${currentAppId}, chatId: ${chatId})`);
     
+    // Log active mappings count to verify config loading
+    const mappingCount = Object.keys(this.staticMappings).length;
+    if (mappingCount > 0) {
+      // log('INFO', `📊 当前生效的静态映射数量: ${mappingCount}`);
+      // log('DEBUG', `映射详情: ${JSON.stringify(this.staticMappings)}`);
+    } else {
+      // log('WARN', `⚠️ 当前没有任何静态映射配置`);
+    }
+
     if (!currentAppId) {
        log('WARN', '⚠️ 未提供 appId 且未配置环境变量 FEISHU_APP_ID，可能无法正确缓存或调用 API');
     }
@@ -389,8 +403,8 @@ export class FeishuMentionResolver {
       // 尝试从缓存或映射中反查名字
       let name = "用户"; // 默认回退名
       
-      // 尝试在 botMappings 中反查
-      for (const [key, value] of Object.entries(this.botMappings)) {
+      // 尝试在 staticMappings 中反查
+      for (const [key, value] of Object.entries(this.staticMappings)) {
         if (value === openId) {
           name = key.replace(/^@/, '');
           break;
@@ -409,7 +423,7 @@ export class FeishuMentionResolver {
       }
 
       const tag = this.buildMentionTag(name, openId);
-      log('INFO', `✅ 识别到特殊格式: "${match}" -> "${tag}"`);
+      // log('INFO', `✅ 识别到特殊格式: "${match}" -> "${tag}"`);
       return tag;
     });
 
@@ -430,7 +444,7 @@ export class FeishuMentionResolver {
          return match;
       }
       const tag = this.buildMentionTag(name, openId);
-      log('INFO', `✅ 识别到显式 ID 格式: "${match}" -> "${tag}"`);
+      // log('INFO', `✅ 识别到显式 ID 格式: "${match}" -> "${tag}"`);
       return tag;
     });
     // 匹配所有 @开头的提及
@@ -444,13 +458,13 @@ export class FeishuMentionResolver {
         // 如果处理了显式ID但没有其他@提及，直接返回处理后的文本
         return processedText;
       }
-      log('WARN', '⚠️ 未找到任何@提及');
+      // log('WARN', '⚠️ 未找到任何@提及');
       return text;
     }
     
-    log('INFO', `找到 ${matches.length} 个@提及 (普通解析):`);
+    // log('INFO', `找到 ${matches.length} 个@提及 (普通解析):`);
     for (let i = 0; i < matches.length; i++) {
-      log('DEBUG', `   [${i + 1}] "${matches[i][0]}"`);
+      // log('DEBUG', `   [${i + 1}] "${matches[i][0]}"`);
     }
     
     // 按反向顺序替换
@@ -462,17 +476,17 @@ export class FeishuMentionResolver {
       
       // 跳过已有<at>标签的
       if (/<at\s+user_id=".*?".*?>.*?<\/at>/.test(fullMatch)) {
-        log('DEBUG', `   ✅ 已有<at>标签，跳过`);
+        // log('DEBUG', `   ✅ 已有<at>标签，跳过`);
         continue;
       }
       
       const resolved = await this.resolveMention(fullMatch, currentAppId, chatId);
       result = result.substring(0, match.index) + resolved + result.substring(match.index + fullMatch.length);
       
-      log('INFO', `🔄 "${fullMatch}" => "${resolved}"`);
+      // log('INFO', `🔄 "${fullMatch}" => "${resolved}"`);
     }
     
-    log('INFO', `\n结果:"${result}"`);
+    // log('INFO', `\n结果:"${result}"`);
     return result;
   }
   
@@ -483,14 +497,14 @@ export class FeishuMentionResolver {
       members_data: membersData
     };
     fs.writeFileSync(cacheFile, JSON.stringify(cachedData, null, 2), 'utf8');
-    log('INFO', `💾 缓存已保存：${cacheFile}`);
+    // log('INFO', `💾 缓存已保存：${cacheFile}`);
   }
   
   invalidateCache(appId, chatId) {
     const cacheFile = this._getCacheFile(appId, chatId);
     if (fs.existsSync(cacheFile)) {
       fs.unlinkSync(cacheFile);
-      log('INFO', `🗑️ 已清除缓存：${cacheFile}`);
+      // log('INFO', `🗑️ 已清除缓存：${cacheFile}`);
     }
   }
   
@@ -503,7 +517,7 @@ export class FeishuMentionResolver {
       }
     }
     this.memoryCache.clear();
-    log('INFO', `🗑️ 已清除所有缓存 (${files.length}个文件)`);
+    // log('INFO', `🗑️ 已清除所有缓存 (${files.length}个文件)`);
   }
 }
 
@@ -515,10 +529,18 @@ export async function resolve(text, appId, chatId, options = {}) {
   // 2. 环境变量 (通过默认值)
   // 3. globalResolver 中已存在的配置
 
+  // 解析传入的映射配置 (优先级：staticMapping JSON > botMapping JSON > staticMappings Obj > botMappings Obj)
+  const passedMappings = options.staticMapping 
+    ? JSON.parse(options.staticMapping) 
+    : (options.botMapping 
+        ? JSON.parse(options.botMapping) 
+        : (options.staticMappings || options.botMappings || {}));
+
   const finalOptions = {
     appId: options.appId || globalResolver.appId,
     appSecret: options.appSecret || globalResolver.appSecret,
-    botMappings: { ...globalResolver.botMappings, ...(options.botMappings || {}) },
+    // 合并全局配置和传入配置
+    staticMappings: { ...globalResolver.staticMappings, ...passedMappings },
     aliases: [ ...globalResolver.userAliases, ...(options.aliases || []) ]
   };
 
@@ -546,40 +568,44 @@ export function clearCache(appId, chatId) {
 // 全局实例
 const globalResolver = new FeishuMentionResolver();
 
-export function addBotMapping(atName, openId) {
-  globalResolver.botMappings[atName] = openId;
-  log('INFO', `➕ 添加机器人映射：${atName} → ${openId}`);
+export function addStaticMapping(atName, openId) {
+  globalResolver.staticMappings[atName] = openId;
+  // log('INFO', `➕ 添加静态映射：${atName} → ${openId}`);
 }
+
+// 兼容旧函数名
+export const addBotMapping = addStaticMapping;
 
 export function addUserAlias(realName, aliases) {
   globalResolver.userAliases.push({ name: realName, alias: aliases });
-  log('INFO', `➕ 添加别名：${realName} ← [${aliases.join(', ')}]`);
+  // log('INFO', `➕ 添加别名：${realName} ← [${aliases.join(', ')}]`);
 }
 
 export async function saveBotConfig(filePath = null) {
   const config = {
-    botMappings: globalResolver.botMappings,
+    staticMappings: globalResolver.staticMappings,
     userAliases: globalResolver.userAliases,
     saved_at: new Date().toISOString()
   };
   const targetPath = filePath || path.join(globalResolver.cacheDir, 'bots_cache.json');
   fs.writeFileSync(targetPath, JSON.stringify(config, null, 2), 'utf8');
-  log('INFO', `💾 配置已保存到：${targetPath}`);
+  // log('INFO', `💾 配置已保存到：${targetPath}`);
   return targetPath;
 }
 
 export async function loadBotConfig(filePath = null) {
   const targetPath = filePath || path.join(globalResolver.cacheDir, 'bots_cache.json');
   if (!fs.existsSync(targetPath)) {
-    log('WARN', `❌ 配置文件不存在：${targetPath}`);
+    // log('WARN', `❌ 配置文件不存在：${targetPath}`);
     return false;
   }
   try {
     const content = fs.readFileSync(targetPath, 'utf8');
     const config = JSON.parse(content);
-    Object.assign(globalResolver.botMappings, config.botMappings || {});
+    // 兼容旧配置 key (botMappings)
+    Object.assign(globalResolver.staticMappings, config.staticMappings || config.botMappings || {});
     globalResolver.userAliases.push(...(config.aliases || []));
-    log('INFO', `✅ 配置已加载 (${Object.keys(globalResolver.botMappings).length}个机器人，${globalResolver.userAliases.length}个别名)`);
+    // log('INFO', `✅ 配置已加载 (${Object.keys(globalResolver.staticMappings).length}个静态映射，${globalResolver.userAliases.length}个别名)`);
     return true;
   } catch (error) {
     log('ERROR', '加载配置失败:', error.message);

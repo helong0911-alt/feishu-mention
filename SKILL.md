@@ -14,7 +14,8 @@ description: |
   **Context Requirements**:
   - `appId`: The Feishu App ID (cli_...). REQUIRED. Find it in context.
   - `chatId`: The Chat ID (oc_...) (REQUIRED).
-  - `FEISHU_BOT_MAPPING`: (Optional) Env var for static bot mappings.
+  - `staticMapping`: (REQUIRED) JSON string mapping names to OpenIDs (e.g. `{"@TechBot": "ou_xxx"}`). Pass this from the `FEISHU_BOT_MAPPING` environment variable if available, or pass `{}` if empty.
+
 actions:
   resolve:
     description: Resolve all mentions in the text
@@ -22,6 +23,7 @@ actions:
       text: The message text to parse
       appId: The Feishu App ID (REQUIRED)
       chatId: The Feishu Chat ID (REQUIRED)
+      staticMapping: JSON string of static name to ID mappings (REQUIRED)
 ---
 
 # Feishu Mention Resolver - 飞书@提及解析器
@@ -67,13 +69,13 @@ async def process_message(text):
     return resolved_text
 ```
 
-### 🤖 支持机器人 @ 提及
+### 🤖 支持静态映射（如机器人）
 
-如果消息中要 @的是另一个机器人（而非普通用户），可以在初始化时配置映射表：
+如果消息中要 @的是另一个机器人（而非普通用户），或者需要固定映射某些名字，可以在初始化时配置映射表：
 
 ```javascript
 const resolver = new FeishuMentionResolver(undefined, {
-  botMappings: {
+  staticMappings: {
     '@技术助手': 'rs_xxxxxxxxxxxxxx',   // 机器人的 open_id 以 rs_开头
     '@数据查询': 'rs_yyyyyyyyyyyyyy',
     '@日程提醒': 'rs_zzzzzzzzzzzzzz'
@@ -90,7 +92,7 @@ resolve('你好 @技术助手', appId, chatId);
 ```
 
 **优先级顺序：**
-1. `@机器人` → 匹配 botMappings（优先）
+1. `@静态映射` → 匹配 staticMappings（优先）
 2. `@别名` → 转换为真实姓名后查找
 3. `@真人` → 匹配企业通讯录缓存/API
 4. 都不匹配 → 原样输出
@@ -131,14 +133,14 @@ resolve('你好 @技术助手', appId, chatId);
 - `cache_dir`: 可选，缓存目录路径
   - 默认：`~/.openclaw/workspace/cache/feishu_mentions`
 - `options`: 可选，配置选项对象
-  - `botMappings`: 机器人映射表 `{"@机器人名": "rs_xxx"}`
+  - `staticMappings`: 静态映射表 `{"@机器人名": "rs_xxx", "固定名": "ou_xxx"}` (原 `botMappings`)
   - `aliases`: 用户别名规则 `[{"name": "真实名", "alias": ["别名 1", "别名 2"]}]`
 
 **示例:**
 ```javascript
-// 支持机器人和别名
+// 支持静态映射和别名
 const resolver = new FeishuMentionResolver(undefined, {
-  botMappings: {
+  staticMappings: {
     '@技术助手': 'rs_tech_001',
     '@数据查询': 'rs_data_001'
   },
@@ -255,20 +257,55 @@ await resolve('请 @[user:ou_123456] 确认', appId, chatId);
 // → "请 <at user_id="ou_123456">张三</at> 确认" (自动反查名字)
 ```
 
-### 3. 其他机器人 (需配置)
+### 3. 静态映射（如机器人、固定ID）
 
-机器人的 openid 通常以 `rs_`开头：
+可以通过 `staticMappings` 配置固定的映射关系：
 ```javascript
 const resolver = new FeishuMentionResolver(undefined, {
-  botMappings: {
+  staticMappings: {
     '@技术助手': 'rs_tech_assistant',
-    '@数据查询': 'rs_data_analyst'
+    '@固定用户': 'ou_fixed_user_id'
   }
 });
 
 // 原文："请 @技术助手 帮我查一下"
 await resolve('请 @技术助手 帮我查一下', appId, chatId);
 // → "请 <at user_id="rs_tech_assistant">技术助手</at> 帮我查一下"
+```
+
+### 3. 别名引用 (需配置)
+```javascript
+{
+  aliases: [
+    { name: '张三', alias: ['小王', '张经理', 'zhangsan'] }
+  ]
+}
+
+// 原文："@小王 过来一下"
+await resolve('@小王 过来一下', appId, chatId);
+// → "<at user_id="ou_xxx">张三</at> 过来一下" (如果张三在成员列表中)
+```
+
+---
+
+## 💡 配置文件示例
+
+建议将常用配置保存在文件中：
+
+```json
+{
+  "staticMappings": {
+    "@技术助手": "rs_tech_bot_001",
+    "@数据分析": "rs_data_bot_001"
+  },
+  "aliases": [
+    {
+      "name": "张三",
+      "alias": ["小王", "张经理", "zhangsan"]
+    }
+  ],
+  "saved_at": "2026-03-05T14:00:00.000Z"
+}
 ```
 
 ### 3. 别名引用 (需配置)
@@ -419,18 +456,18 @@ A: 可能的原因：
 1. 该用户不在缓存的成员列表中
 2. 用户名与飞书显示的名称不完全匹配
 3. API 调用失败，降级为原样输出
-4. **这是机器人而非真人** → 需要使用 botMappings 配置映射
+4. **这是机器人或固定映射** → 需要使用 staticMappings 配置映射
 
 ### Q: 支持 @其他机器人吗？
 
 A: **支持！** 有两种方式：
-1. **推荐**：在初始化时通过 `botMappings` 配置映射表
+1. **推荐**：在初始化时通过 `staticMappings` 配置映射表
    ```javascript
    new FeishuMentionResolver(undefined, {
-     botMappings: { '@技术助手': 'rs_xxx' }
+     staticMappings: { '@技术助手': 'rs_xxx' }
    });
    ```
-2. **动态添加**：使用 `addBotMapping('@机器人名', 'rs_xxx')`
+2. **动态添加**：使用 `addStaticMapping('@机器人名', 'rs_xxx')`
 
 ### Q: 支持别名吗？
 
@@ -462,6 +499,6 @@ A: 默认保存在 `~/.openclaw/workspace/cache/feishu_mentions/bots_cache.json`
 
 ---
 
-**版本**: 1.3.0 (强化 Skill 描述为强制指令)  
+**版本**: 1.4.0 (支持静态映射参数 staticMapping)  
 **作者**: OpenClaw AI Assistant  
 **最后更新**: 2026-03-05

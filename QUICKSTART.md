@@ -11,28 +11,33 @@ const result = await resolve('你好 @张三', appId, chatId);
 // → "你好 <at user_id="ou_xxx">张三</at>" (如果有缓存或 API)
 ```
 
-### 2. 支持机器人 (@其他机器人)
+### 2. 支持静态映射（如机器人）
 
-**推荐方式：使用环境变量**
-在 `.env` 或 `openclaw.json` 中配置：
-```json
-FEISHU_BOT_MAPPING='{"@技术助手":"rs_tech_001", "@数据":"rs_data_001"}'
+**推荐方式：调用时传入 (Skill 用法)**
+```javascript
+const staticMap = JSON.stringify({
+  "@技术助手": "rs_tech_001",
+  "@数据": "rs_data_001"
+});
+
+// 传入 staticMapping 参数
+const result = await resolve('请 @技术助手 帮忙', appId, chatId, { 
+  staticMapping: staticMap 
+});
 ```
+
+**环境配置方式：**
+在 `.env` 中配置 `FEISHU_BOT_MAPPING`。
 
 **代码方式：**
 ```javascript
-import { addBotMapping, saveBotConfig } from './index.js';
+import { addStaticMapping, saveBotConfig } from './index.js';
 
-// 添加机器人映射
-addBotMapping('@技术助手', 'rs_tech_001');
-addBotMapping('@数据查询', 'rs_data_001');
+// 添加静态映射
+addStaticMapping('@技术助手', 'rs_tech_001');
 
-// 保存到本地（下次自动加载）
+// 保存
 await saveBotConfig();
-
-// 使用
-const result = await resolve('请 @技术助手 帮忙', appId, chatId);
-// → "请 <at user_id="rs_tech_001">技术助手</at> 帮忙" ✅
 ```
 
 ### 3. 支持别名（多种称呼）
@@ -54,22 +59,13 @@ await resolve('@张经理 看一下', appId, chatId);
 import { FeishuMentionResolver } from './index.js';
 
 const resolver = new FeishuMentionResolver(undefined, {
-  botMappings: {
-    '@技术助手': 'rs_tech_001',
-    '@审批流程': 'rs_approval_001'
+  staticMappings: {
+    '@技术助手': 'rs_tech_001'
   },
   aliases: [
-    { name: '张三', alias: ['小王', '老张'] },
-    { name: '李四', alias: ['李总', 'lisi'] }
+    { name: '张三', alias: ['小王'] }
   ]
 });
-
-const result = await resolver.resolveTextMentions(
-  '你好 @技术助手，@小王 说...',
-  appId, 
-  chatId
-);
-// → "你好 <at user_id="rs_tech_001">技术助手</at>, <at user_id="ou_yyy">张三</at> 说..."
 ```
 
 ---
@@ -79,7 +75,7 @@ const result = await resolver.resolveTextMentions(
 | 功能 | 是否需要配置 | 说明 |
 |------|------------|------|
 | 真人用户 | ✅ 自动 | 通过飞书 API 获取成员列表 |
-| 机器人 | ⚙️ 手动 | 需配置 `botMappings` |
+| 静态映射 | ⚙️ 手动 | 通过 `staticMapping` 参数或 ENV |
 | 别名引用 | ⚙️ 手动 | 需配置 `aliases` |
 | 多 Bot 支持 | ✅ 自动 | 每个 app_id 独立缓存 |
 | 多群支持 | ✅ 自动 | 每个 chat_id 独立缓存 |

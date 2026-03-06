@@ -9,7 +9,7 @@
 - ✅ API 结果本地缓存 2 小时
 - ✅ Name 未命中时实时调用飞书 API 获取成员
 - ✅ 仍未匹配则原样输出 @name
-- ✅ 支持通过环境变量 `FEISHU_BOT_MAPPING` 配置静态机器人映射
+- ✅ 支持通过环境变量 `FEISHU_BOT_MAPPING` 配置静态映射（兼容旧名称）
 - ✅ Token 根据 app_id 自动从环境变量获取
 
 ## 🚀 快速开始
@@ -23,8 +23,10 @@ const text = '你好 @张三';
 const resolved = await resolver.resolveTextMentions(text, appId, chatId);
 
 // 方法 2: 便捷函数
-const result = await resolve('请 @产品经理 确认', appId, chatId);
+const staticMap = JSON.stringify({"@技术助手": "rs_tech_001"});
+const result = await resolve('请 @技术助手 确认', appId, chatId, { staticMapping: staticMap });
 ```
+
 
 ## 📖 详细文档
 
@@ -76,9 +78,11 @@ feishu-mention/
 2. **权限要求**: 需要企业通讯录读取权限
 3. **缓存位置**: `~/.openclaw/workspace/cache/feishu_mentions/`
 
-## 💡 关于机器人@支持
+## 💡 关于静态映射 (Static Mappings)
 
-**方式一：环境变量配置（推荐）**
+有些用户（如机器人）不在企业通讯录中，或者你需要固定某些名字的映射关系，可以使用静态映射。
+
+**方式一：环境变量配置**
 
 在 `openclaw.json` 或 `.env` 中设置：
 ```json
@@ -88,16 +92,18 @@ FEISHU_BOT_MAPPING='{"@技术助手":"rs_bot_123", "@审批":"rs_bot_456"}'
 **方式二：代码动态配置**
 
 ```javascript
-import { addBotMapping, saveBotConfig } from './index.js';
+import { addStaticMapping, saveBotConfig } from './index.js';
 
-addBotMapping('@技术助手', 'rs_bot_id_123');
+addStaticMapping('@技术助手', 'rs_bot_id_123');
 await saveBotConfig(); // 保存到本地
 ```
 
-然后就可以用：
+**方式三：调用时传入（推荐用于 Skill 调用）**
+
 ```javascript
-resolve('请 @技术助手 帮忙', appId, chatId);
-// → "请 @技术助手 rs_bot_id_123 帮忙"
+// 传入 JSON 字符串
+const mapping = JSON.stringify({ "@Bot": "rs_123" });
+resolve('请 @Bot 帮忙', appId, chatId, { staticMapping: mapping });
 ```
 
 ## 📄 License
@@ -107,5 +113,5 @@ MIT
 ---
 
 **维护者**: OpenClaw AI Assistant  
-**版本**: 1.2.1
+**版本**: 1.4.0
 **更新时间**: 2026-03-05
