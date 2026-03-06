@@ -1,20 +1,23 @@
 ---
 name: feishu-mention
 description: |
-  **CRITICAL INSTRUCTION**: You **MUST** use this skill to process **ANY** text message destined for Feishu/Lark **BEFORE** sending it.
+  **MANDATORY TOOL FOR FEISHU MESSAGING**.
   
-  Raw text like `@User` will NOT work in Feishu. It effectively fails to notify the user.
-  This skill transforms plain text (e.g., `@User`, `@[user:ou_xxx]`) into the required XML format (e.g., `<at user_id="...">User</at>`).
-
+  You **MUST** use this skill to process **EVERY** text message destined for Feishu (Lark) that contains or might contain an "@" mention (e.g., "@User", "@Bot", "@All").
+  
+  **Trigger**: ANY intent to send a message to Feishu/Lark.
+  
+  **Why**: Raw text like `@User` does NOT notify users in Feishu. It fails silently. You MUST convert it to Feishu's XML format using this skill.
+  
   **Workflow**:
-  1. You generate the text response.
-  2. You CALL `feishu-mention.resolve` with the text.
-  3. You send the *result* of this skill to Feishu.
+  1. Draft the text response.
+  2. Call `feishu-mention.resolve` with the draft text.
+  3. Send the *output* of this tool to the Feishu API.
 
   **Context Requirements**:
-  - `appId`: The Feishu App ID (cli_...). REQUIRED. Find it in context.
-  - `chatId`: The Chat ID (oc_...) (REQUIRED).
-  - `staticMapping`: (REQUIRED) JSON string mapping names to OpenIDs (e.g. `{"@TechBot": "ou_xxx"}`). Pass this from the `FEISHU_BOT_MAPPING` environment variable if available, or pass `{}` if empty.
+  - `appId`: Feishu App ID (starts with `cli_`). REQUIRED.
+  - `chatId`: Feishu Chat ID (starts with `oc_`). REQUIRED.
+  - `staticMapping`: JSON string for bot/static mappings (e.g. `{"@TechBot": "ou_xxx"}`). REQUIRED (pass `{}` if empty).
 
 actions:
   resolve:
