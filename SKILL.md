@@ -2,23 +2,22 @@
 name: feishu-mention
 description: |
   **PRIORITY: HIGHEST**.
-  **MANDATORY TOOL FOR FEISHU MESSAGING**.
-  
-  You **MUST** use this skill to process **EVERY** text message destined for Feishu (Lark) that contains or might contain an "@" mention (e.g., "@User", "@Bot", "@All").
-  
-  **Trigger**: ANY intent to send a message to Feishu/Lark.
-  
-  **Why**: Raw text like `@User` does NOT notify users in Feishu. It fails silently. You MUST convert it to Feishu's XML format using this skill.
-  
-  **Workflow**:
-  1. Draft the text response.
-  2. Call `feishu-mention.resolve` with the draft text.
-  3. Send the *output* of this tool to the Feishu API.
+  **CRITICAL**: You **MUST** use this tool **BEFORE sending any message** to Feishu/Lark if it contains an "@" mention.
 
-  **Context Requirements**:
-  - `appId`: Feishu App ID (starts with `cli_`). REQUIRED. **Find this in the conversation context** (e.g., from previous messages, system info, or other tool outputs).
-  - `chatId`: Feishu Chat ID (starts with `oc_`). REQUIRED. **Find this in the conversation context**.
-  - `staticMapping`: JSON string for bot/static mappings (e.g. `{"@TechBot": "ou_xxx"}`). REQUIRED (pass `{}` if empty).
+  **Trigger**: You are about to send a message to Feishu that mentions a user or bot (e.g., "@User", "@Bot").
+
+  **Why**: Raw text like `@User` does NOT notify users in Feishu. It fails silently. You MUST convert it to XML format using this tool first.
+
+  **Workflow**:
+  1. Draft your message text.
+  2. **STOP**. Do not send it yet.
+  3. Call `feishu-mention.resolve` with the draft text.
+  4. **ONLY THEN** send the *output* of this tool to the Feishu API.
+
+  **Parameter Retrieval**:
+  - `appId`: You **MUST** find the Feishu App ID (starts with `cli_`) from the **current conversation context**, system prompt, or previous tool outputs. Pass it as the `appId` parameter.
+  - `chatId`: You **MUST** find the Chat ID (starts with `oc_`) from the **current conversation context**. Pass it as the `chatId` parameter.
+  - `staticMapping`: (REQUIRED) JSON string for bot/static mappings (e.g. `{"@TechBot": "ou_xxx"}`). Pass `{}` if not found.
 
 actions:
   resolve:
