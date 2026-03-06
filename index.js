@@ -285,6 +285,12 @@ export class FeishuMentionResolver {
     
     const name = nameMatch[1];
     let matchedOpenId = null;
+
+    // 0. 特殊处理 @all / @所有人
+    if (name.toLowerCase() === 'all' || name === '所有人') {
+       // log('INFO', `✅ 识别到全员提及: "${mention}"`);
+       return `<at user_id="all">所有人</at>`;
+    }
     
     // log('DEBUG', `🔍 开始查找: "${name}"`);
     

@@ -260,7 +260,15 @@ await resolve('请 @[user:ou_123456] 确认', appId, chatId);
 // → "请 <at user_id="ou_123456">张三</at> 确认" (自动反查名字)
 ```
 
-### 3. 静态映射（如机器人、固定ID）
+### 3. 全员提及
+支持 `@all` 或 `@所有人`：
+```javascript
+// 原文："@所有人 请注意"
+await resolve('@所有人 请注意', appId, chatId);
+// → "<at user_id="all">所有人</at> 请注意"
+```
+
+### 4. 静态映射（如机器人、固定ID）
 
 可以通过 `staticMappings` 配置固定的映射关系：
 ```javascript
