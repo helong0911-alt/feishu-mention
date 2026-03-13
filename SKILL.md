@@ -2,7 +2,11 @@
 name: feishu-mention
 slug: feishu-mention
 version: 2.0.0
-metadata: {}
+metadata:
+  openclaw:
+    requires:
+      files:
+        - ~/.openclaw/openclaw.json
 description: |
   **PRIORITY: HIGHEST**.
   **CRITICAL**: You **MUST** use this tool **BEFORE sending any message** to Feishu/Lark if it contains an "@" mention.
