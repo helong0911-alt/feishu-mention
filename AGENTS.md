@@ -26,7 +26,6 @@ Since this is a pure JavaScript project, there is no compilation step.
 - **Run Examples**:
   ```bash
   npm run example
-  npm run robot-example
   ```
 
 - **Linting**:

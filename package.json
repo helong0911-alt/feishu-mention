@@ -1,16 +1,15 @@
 {
   "name": "feishu-mention",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "飞书@提及解析器 - 自动将 @name 替换为 @name openid 格式，支持机器人@和别名",
+  "description": "Feishu @Mention Resolver (v2.0) - Auto-resolves @mentions to OpenIDs using OpenClaw configuration. Supports bot discovery, aliases, and group members.",
   "main": "index.js",
   "exports": {
     ".": "./index.js"
   },
   "scripts": {
     "test": "node test.js",
-    "example": "node assets/example_usage.js",
-    "robot-example": "node assets/robot_examples.js"
+    "example": "node assets/example_usage.js"
   },
   "keywords": [
     "feishu",
@@ -19,7 +18,8 @@
     "@mention",
     "openclaw",
     "skill",
-    "bot"
+    "bot",
+    "account-id"
   ],
   "author": "OpenClaw AI Assistant",
   "license": "MIT",

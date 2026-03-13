@@ -1,179 +1,94 @@
-# @隐式提醒调试指南
+# FeishuMention Resolver (v2.0) - 调试指南
 
 ## 🔍 问题诊断步骤
 
-### Step 1: 确认解析是否正确
+### Step 1: 检查 OpenClaw 配置
 
-```javascript
-import { resolve, addBotMapping } from './index.js';
+解析器完全依赖 `~/.openclaw/openclaw.json`。
 
-const text = '@技术助手 帮我一下';
-const appId = 'cliabxxx';
-const chatId = 'oc_yyy';
+1.  打开配置文件：
+    ```bash
+    cat ~/.openclaw/openclaw.json
+    ```
+2.  检查 `channels.feishu.accounts` 部分：
+    *   是否存在你使用的 `accountId` (例如 `elves`)？
+    *   是否存在你要 @ 的机器人账号 (例如 `product`)？
+    *   `appId` 和 `appSecret` 是否正确？
 
-// 添加机器人映射
-addBotMapping('@技术助手', 'rs_bot_id');
+### Step 2: 开启调试日志
 
-const result = await resolve(text, appId, chatId);
+设置环境变量 `DEBUG=true` 运行你的脚本或 Agent，以查看详细的解析日志。
 
-console.log('原文本:', text);
-console.log('解析结果:', result);
-console.log('是否包含 openid?:', result.includes('rs_') || result.includes('ou_'));
+```bash
+DEBUG=true node your_script.js
 ```
 
-**预期输出：**
+**日志示例：**
 ```
-原文本：@技术助手 帮我一下
-解析结果：@技术助手 rs_bot_id 帮我一下
-是否包含 openid?: true
-```
-
-**如果结果还是 `@技术助手 帮我一下`（没有替换）：**
-- ❌ 配置有误 - 检查 `botMappings` 是否正确
-- ❌ 函数调用错误 - 确保使用了异步函数
-
----
-
-### Step 2: 确认消息发送格式
-
-⚠️ **飞书@提及需要特殊格式！**
-
-#### ❌ 错误方式（纯文本）
-```javascript
-// 这样不会触发@提醒
-await sendMessage('@张三 ou_xxx 在吗');
+[FeishuMention INFO] 正在刷新机器人缓存...
+[FeishuMention INFO] 成功获取机器人信息: Product (open_id: ou_xxx)
+[FeishuMention INFO] 解析提及: "@product" -> "<at user_id="ou_xxx">product</at>"
 ```
 
-#### ✅ 正确方式（富文本格式）
+### Step 3: 检查机器人缓存
 
-```javascript
-// 使用 mention_block 才能触发@提醒
-await sendMessage({
-  msg_type: 'post',
-  content: JSON.stringify({
-    title: '回复',
-    paragraphs: [
-      { tag: 'mention', user_id: 'ou_xxx', type: 'person' },
-      { text: { content: '在吗' } }
-    ]
-  })
-});
+解析器会将发现的机器人信息缓存到本地。检查缓存文件确认是否成功获取了 Bot ID。
+
+```bash
+cat ~/.openclaw/workspace/cache/feishu_mentions/bots_info.json
 ```
+
+**预期内容：**
+```json
+{
+  "updated_at": 1710000000000,
+  "data": [
+    {
+      "name": "Product Bot",
+      "open_id": "ou_c610...",
+      "accountId": "product"
+    }
+  ]
+}
+```
+*如果 `data` 为空，说明 API 调用失败，请检查 Step 1 中的凭证。*
 
 ---
 
 ## 🐛 常见错误及解决方案
 
-### 错误 1: 解析后没有 openid
+### 错误 1: `@product` 未被解析 (原样输出)
 
 **可能原因:**
-1. `botMappings` 配置为空或 key 不匹配
-2. 传入的文本不是 `@开头` 的格式
+1.  `openclaw.json` 中没有配置 `product` 账号。
+2.  配置的 `appId/Secret` 错误，导致无法调用 API 获取 Bot ID。
+3.  机器人在飞书后台的名称不是 "Product"，且你使用的 `@` 名称与 Account ID 也不匹配。
 
-**调试:**
-```javascript
-console.log('要匹配的 name:', mention.match(/^@(.*?)$/)[1]);
-console.log('botMappings:', resolver.botMappings);
-console.log('是否找到？', !!resolver.botMappings[matchedName]);
-```
+**解决方案:**
+*   确保 `openclaw.json` 正确。
+*   尝试删除缓存文件 `rm ~/.openclaw/workspace/cache/feishu_mentions/bots_info.json` 强制刷新。
 
-### 错误 2: 发送了但没看到@效果
+### 错误 2: 群成员解析失败
 
-**原因:** 飞书的消息类型不支持纯文本@
+**可能原因:**
+1.  使用的 `accountId` (调用者) 所在的机器人未加入该群。
+2.  机器人未开通「获取群组成员」权限。
 
-**解决方案:** 使用富文本格式
-
-参考飞书官方文档：
-https://open.feishu.cn/document/uYjL4xnC2UjkNwDN4QDN
-
-要点：
-- 群聊@使用 `mention_block`
-- message_id 参数指定被@的人
+**解决方案:**
+*   在飞书客户端拉机器人进群。
+*   在飞书开发者后台 -> 权限管理 -> 搜索 "获取群组信息" 和 "获取群组成员" 并开通。
 
 ---
 
-## ✅ 验证清单
+## ✅ 验证脚本
 
-在确认功能正常前，请依次检查：
+使用内置的测试脚本验证环境：
 
-- [ ] 1. `node_modules` 中有 `feishu-mention` 文件夹
-- [ ] 2. `index.js` 可以正常导入（无语法错误）
-- [ ] 3. `FeishuMentionResolver` 构造函数可用
-- [ ] 4. `resolve()` 函数返回 Promise
-- [ ] 5. `botMappings` 中配置了对应的机器人 ID
-- [ ] 6. 解析后的文本包含 `ou_` 或 `rs_` 前缀
-- [ ] 7. 发送消息时使用了正确的富文本格式
-- [ ] 8. 飞书机器人有权限向该群组发送消息
-
----
-
-## 💡 快速测试代码
-
-复制这个完整测试脚本：
-
-```javascript
-// test_mention.js
-import { FeishuMentionResolver, addBotMapping } from './index.js';
-
-async function test() {
-  console.log('=== 测试开始 ===\n');
-  
-  // 1. 初始化
-  const resolver = new FeishuMentionResolver(undefined, {
-    botMappings: {
-      '@测试机器人': 'rs_test_001'
-    }
-  });
-  
-  console.log('✅ 初始化完成');
-  
-  // 2. 解析
-  const text = '@测试机器人 你好';
-  const resolved = await resolver.resolveTextMentions(text, 'appId123', 'oc_chat456');
-  
-  console.log('输入:', text);
-  console.log('输出:', resolved);
-  console.log('解析成功？', resolved.includes('rs_test_001'));
-  
-  // 3. 查看配置
-  console.log('\n当前配置的机器人:');
-  console.log(Object.keys(resolver.botMappings));
-}
-
-test().catch(console.error);
-```
-
-运行：
 ```bash
-node test_mention.js
-```
+# 1. 进入目录
+cd ~/.openclaw/skills/feishu-mention
 
----
-
-## 📞 仍不能解决？
-
-请提供以下信息：
-
-1. 你的完整代码片段
-2. 控制台输出的日志
-3. 飞书 API 返回的错误信息（如果有）
-4. 你期望的行为 vs 实际行为
-
-示例：
-```javascript
-// 你的代码
-import { ... } from './index.js';
-const result = await resolve(...);
-console.log(result);
-```
-
-输出：
-```
-原文：...
-解析结果：... (应该显示 openid)
-```
-
-实际看到的：
-```
-... (把你实际看到的贴上来)
+# 2. 运行测试 (使用你的 accountId)
+# 修改 test.js 中的 accountId 和 chatId
+DEBUG=true node test.js
 ```

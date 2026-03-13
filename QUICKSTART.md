@@ -1,168 +1,88 @@
-# FeishuMention Resolver - 快速参考
+# FeishuMention Resolver - 快速参考 (v2.0)
 
 ## 🚀 30 秒上手
 
-### 1. 基础使用（真人用户）
+### 1. 确认 OpenClaw 配置
 
-```javascript
-import { resolve } from './index.js';
+本技能依赖 `~/.openclaw/openclaw.json` 中的配置。请确保您的 `feishu.accounts` 块已正确配置：
 
-const result = await resolve('你好 @张三', appId, chatId);
-// → "你好 <at user_id="ou_xxx">张三</at>" (如果有缓存或 API)
+```json
+"accounts": {
+  "product": { "appId": "...", "appSecret": "..." },
+  "elves": { "appId": "...", "appSecret": "..." }
+}
 ```
 
-### 2. 支持静态映射（如机器人）
+### 2. 基础使用（零配置）
 
-**推荐方式：调用时传入 (Skill 用法)**
+无需手动映射机器人或设置 ID，直接使用 Account ID（如 `elves`）即可：
+
 ```javascript
-const staticMap = JSON.stringify({
-  "@技术助手": "rs_tech_001",
-  "@数据": "rs_data_001"
-});
+const { resolve } = require('./index.js');
 
-// 传入 staticMapping 参数
-const result = await resolve('请 @技术助手 帮忙', appId, chatId, { 
-  staticMapping: staticMap 
-});
+// 场景：Elves 机器人收到消息，需要回复并 @product 和 @张三
+const text = '你好 @product，请协助 @张三';
+const accountId = 'elves'; // 使用 Elves 的身份
+const chatId = 'oc_123456...';
+
+const result = await resolve(text, accountId, chatId);
+// → "你好 <at user_id="ou_product_id">product</at>，请协助 <at user_id="ou_zhangsan_id">张三</at>"
 ```
 
-**环境配置方式：**
-在 `.env` 中配置 `FEISHU_BOT_MAPPING`。
+### 3. 支持别名（可选）
 
-**代码方式：**
-```javascript
-import { addStaticMapping, saveBotConfig } from './index.js';
-
-// 添加静态映射
-addStaticMapping('@技术助手', 'rs_tech_001');
-
-// 保存
-await saveBotConfig();
-```
-
-### 3. 支持别名（多种称呼）
+虽然不需要配置机器人，但如果您需要支持同事的昵称，仍可传入 `aliases`：
 
 ```javascript
-import { addUserAlias } from './index.js';
+// 张三的昵称是 "老张"
+const aliases = [{ name: '张三', alias: ['老张'] }];
 
-// 添加别名规则
-addUserAlias('张三', ['小王', '张经理', 'zhangsan']);
-
-// 使用（都可以解析为真实姓名）
-await resolve('@小王 在吗？', appId, chatId);
-await resolve('@张经理 看一下', appId, chatId);
-```
-
-### 4. 初始化时一次性配置
-
-```javascript
-import { FeishuMentionResolver } from './index.js';
-
-const resolver = new FeishuMentionResolver(undefined, {
-  staticMappings: {
-    '@技术助手': 'rs_tech_001'
-  },
-  aliases: [
-    { name: '张三', alias: ['小王'] }
-  ]
-});
+const result = await resolve('呼叫 @老张', 'elves', chatId, { aliases });
+// → "呼叫 <at user_id="ou_zhangsan_id">张三</at>"
 ```
 
 ---
 
-## 📋 完整功能列表
+## 📋 功能对比 (v1 vs v2)
 
-| 功能 | 是否需要配置 | 说明 |
-|------|------------|------|
-| 真人用户 | ✅ 自动 | 通过飞书 API 获取成员列表 |
-| 静态映射 | ⚙️ 手动 | 通过 `staticMapping` 参数或 ENV |
-| 别名引用 | ⚙️ 手动 | 需配置 `aliases` |
-| 多 Bot 支持 | ✅ 自动 | 每个 app_id 独立缓存 |
-| 多群支持 | ✅ 自动 | 每个 chat_id 独立缓存 |
-| API 降级 | ✅ 自动 | 失败时原样输出 |
-| 本地缓存 | ✅ 自动 | 2 小时 TTL |
-
----
-
-## 💾 配置文件位置
-
-- **默认路径**: `~/.openclaw/workspace/cache/feishu_mentions/bots_cache.json`
-- **自定义路径**: `loadBotConfig('/path/to/config.json')`
+| 功能 | 旧版 (v1.x) | 新版 (v2.0) |
+|------|------------|------------|
+| **身份认证** | 需手动传入 App ID/Secret | **自动** (使用 Account ID) |
+| **机器人映射** | 需手动维护 JSON 映射表 | **自动** (从配置中发现) |
+| **真人解析** | 支持 | 支持 |
+| **配置来源** | 环境变量/代码参数 | **`openclaw.json`** |
 
 ---
 
 ## 🔍 提及解析优先级
 
-```
-1. 机器人映射 (botMappings)      ← 最高优先级
-   ↓ 未匹配
-2. 用户别名 (aliases)             → 转换为真实姓名后查
-   ↓ 未匹配
-3. 企业通讯录 (缓存 + API)        → 真人用户
-   ↓ 都未匹配
-4. 原样输出                       ← 兜底策略
-```
+系统按以下顺序尝试解析 `@name`：
+
+1.  **已配置机器人** (Priority 1)
+    *   检查 `openclaw.json` 中的所有账号。
+    *   匹配 `Agent ID` (如 `@product`) 或 `Bot Name` (如 `@Product Bot`)。
+    *   *不区分大小写*。
+
+2.  **用户别名** (Priority 2)
+    *   检查传入的 `options.aliases`。
+    *   将别名转换为真实姓名后，递归解析。
+
+3.  **企业通讯录** (Priority 3)
+    *   检查本地缓存。
+    *   调用飞书 API 获取群成员 (使用 `accountId` 对应的凭证)。
+
+4.  **原样输出** (Fallback)
+    *   如果都未匹配，保留原文本 (如 `@UnknownUser`)。
 
 ---
 
-## 🎯 使用场景示例
+## ⚠️ 常见问题
 
-### 场景 A: 消息中同时有真人和机器人
+**Q: 为什么 `@product` 没有变色？**
+A: 请检查 `openclaw.json` 中是否配置了 `product` 账号，并且该账号对应的 Bot 在飞书后台的名称是否与 `@` 的内容匹配（或使用 Account ID）。
 
-```javascript
-const text = '@技术助手 帮 @产品经理 查下数据';
+**Q: 为什么无法解析群成员？**
+A: 请确保您使用的 `accountId` (例如 `elves`) 对应的飞书机器人已加入该群，并且拥有「获取群组成员」的权限。
 
-// 配置
-new FeishuMentionResolver(undefined, {
-  botMappings: { '@技术助手': 'rs_tech_001' },
-  aliases: [{ name: '产品经理', alias: ['PM', '产品'] }]
-});
-
-// 结果
-"<at user_id="rs_tech_001">技术助手</at> 帮 <at user_id="ou_prod_001">产品经理</at> 查下数据"
-```
-
-### 场景 B: 群聊中有多个机器人
-
-```javascript
-new FeishuMentionResolver(undefined, {
-  botMappings: {
-    '@日程管理': 'rs_calendar_bot',
-    '@数据看板': 'rs_dashboard_bot',
-    '@审批助手': 'rs_approval_bot',
-    '@新闻推送': 'rs_news_bot'
-  }
-});
-```
-
-### 场景 C: 新人入职（先配置别名）
-
-```javascript
-// 新来的同事叫"王小明"，但喜欢被叫"WangX"、"小王"
-addUserAlias('王小明', ['WangX', '小王', 'xm_wang']);
-
-// 之后都可以用这些称呼
-await resolve('@WangX 明天会议别迟到', appId, chatId);
-```
-
----
-
-## ⚠️ 注意事项
-
-1. **机器人在飞书通讯录中不存在**，所以必须手动配置映射
-2. **机器人的 openid 格式**通常是 `rs_开头`（普通用户是`ou_`开头）
-3. **配置保存后永久有效**，除非调用 `clearCache()` 清除
-
----
-
-## 📖 更多示例
-
-查看以下文件了解更多用法：
-- `assets/example_usage.js` - 综合示例
-- `assets/robot_examples.js` - 机器人支持演示
-- `test.js` - 单元测试
-
----
-
-**版本**: 1.2.1 (支持环境变量配置机器人)  
-**更新时间**: 2026-03-05
+**Q: 缓存多久更新？**
+A: 群成员缓存 2 小时；机器人信息缓存 24 小时。重启应用或手动删除缓存文件可强制刷新。
