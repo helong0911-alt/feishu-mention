@@ -7,6 +7,8 @@ metadata:
     requires:
       files:
         - ~/.openclaw/openclaw.json
+      write:
+        - ~/.openclaw/workspace/cache/feishu_mentions/**/*
 description: |
   **PRIORITY: HIGHEST**.
   **CRITICAL**: You **MUST** use this tool **BEFORE sending any message** to Feishu/Lark if it contains an "@" mention.
